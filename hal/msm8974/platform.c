@@ -413,6 +413,11 @@ static struct csd_data *open_csd_client()
 {
     struct csd_data *csd = calloc(1, sizeof(struct csd_data));
 
+    if (!csd) {
+        ALOGE("failed to allocate csd_data mem");
+        return NULL;
+    }
+
     csd->csd_client = dlopen(LIB_CSD_CLIENT, RTLD_NOW);
     if (csd->csd_client == NULL) {
         ALOGE("%s: DLOPEN failed for %s", __func__, LIB_CSD_CLIENT);
@@ -550,6 +555,11 @@ void *platform_init(struct audio_device *adev)
     const char *snd_card_name;
 
     my_data = calloc(1, sizeof(struct platform_data));
+
+    if (!my_data) {
+        ALOGE("failed to allocate platform data");
+        return NULL;
+    }
 
     while (snd_card_num < MAX_SND_CARD) {
         adev->mixer = mixer_open(snd_card_num);
@@ -1075,7 +1085,9 @@ snd_device_t platform_get_output_snd_device(void *platform, audio_devices_t devi
         } else if (devices == (AUDIO_DEVICE_OUT_AUX_DIGITAL |
                                AUDIO_DEVICE_OUT_SPEAKER)) {
             snd_device = SND_DEVICE_OUT_SPEAKER_AND_HDMI;
-        } else if (devices == (AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET |
+        } else if ((devices == (AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET |
+                               AUDIO_DEVICE_OUT_SPEAKER)) ||
+                    devices == (AUDIO_DEVICE_OUT_DGTL_DOCK_HEADSET |
                                AUDIO_DEVICE_OUT_SPEAKER)) {
             snd_device = SND_DEVICE_OUT_SPEAKER_AND_USB_HEADSET;
         } else {
@@ -1225,7 +1237,7 @@ snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_d
     ALOGV("%s: enter: out_device(%#x) in_device(%#x)",
           __func__, out_device, in_device);
     if ((out_device != AUDIO_DEVICE_NONE) && ((mode == AUDIO_MODE_IN_CALL) ||
-        voice_extn_compress_voip_is_active(adev))) {
+        voice_extn_compress_voip_is_active(adev) || audio_extn_hfp_is_active(adev))) {
         if ((adev->voice.tty_mode != TTY_MODE_OFF) &&
             !voice_extn_compress_voip_is_active(adev)) {
             if (out_device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE ||
@@ -1262,7 +1274,7 @@ snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_d
             }
         } else if (out_device & AUDIO_DEVICE_OUT_WIRED_HEADSET) {
             snd_device = SND_DEVICE_IN_VOICE_HEADSET_MIC;
-            set_echo_reference(adev->mixer, EC_REF_RX);
+            set_echo_reference(adev, true);
         } else if (out_device & AUDIO_DEVICE_OUT_ALL_SCO) {
             if (my_data->btsco_sample_rate == SAMPLE_RATE_16KHZ)
                 snd_device = SND_DEVICE_IN_BT_SCO_MIC_WB;
@@ -1281,7 +1293,7 @@ snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_d
                 }
             } else {
                 snd_device = SND_DEVICE_IN_VOICE_SPEAKER_MIC;
-                set_echo_reference(adev->mixer, EC_REF_RX);
+                set_echo_reference(adev, true);
             }
         }
     } else if (source == AUDIO_SOURCE_CAMCORDER) {
